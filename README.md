@@ -26,8 +26,23 @@ ElasticPress Instant Search is a simple wrapper around the free ElasticPress plu
 
 - WordPress 5.0 or higher
 - WooCommerce 3.0 or higher (for product search)
-- **ElasticPress plugin** (free version) - Must be installed, activated, and properly configured
+- **[ElasticPress plugin](https://wordpress.org/plugins/elasticpress/)** (free version) - Must be installed, activated, and properly configured
 - **Self-hosted Elasticsearch instance** - You need your own Elasticsearch server (not included)
+
+### About ElasticPress
+
+[ElasticPress](https://wordpress.org/plugins/elasticpress/) is a free WordPress plugin by 10up that powers fast and flexible search by connecting your site to an Elasticsearch server. It replaces the default WordPress search with Elasticsearch, providing:
+
+- Lightning-fast search results
+- Relevant results with weighted scoring
+- Fuzzy matching for typos
+- Search across multiple content types
+- WooCommerce product search
+- Custom field and meta search
+- Synonym support
+- And much more
+
+**Note:** ElasticPress is different from ElasticPress.io (the paid hosted service). The free plugin requires your own Elasticsearch server, which is why we recommend using DigitalOcean's one-click setup below.
 
 ## Elasticsearch Setup
 
@@ -60,7 +75,7 @@ The easiest way to get started is with DigitalOcean's pre-configured Elasticsear
    - Configure security settings if needed
 
 2. **Install and configure ElasticPress**:
-   - Install the free ElasticPress plugin from WordPress.org
+   - Install the [free ElasticPress plugin from WordPress.org](https://wordpress.org/plugins/elasticpress/)
    - Go to ElasticPress → Settings
    - Enter your Elasticsearch endpoint URL
    - Enable desired features (Search, WooCommerce, etc.)
