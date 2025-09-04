@@ -24,10 +24,24 @@ class EP_Instant_Search {
         add_action('wp_ajax_ep_instant_search', array($this, 'handle_search'));
         add_action('wp_ajax_nopriv_ep_instant_search', array($this, 'handle_search'));
         add_action('wp_head', array($this, 'add_inline_styles'));
+        add_action('send_headers', array($this, 'add_security_headers'));
         
         // Admin settings
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
+    }
+    
+    /**
+     * Add security headers for AJAX requests
+     */
+    public function add_security_headers() {
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            // Add security headers for AJAX responses
+            header('X-Content-Type-Options: nosniff');
+            header('X-Frame-Options: SAMEORIGIN');
+            header('X-XSS-Protection: 1; mode=block');
+            header('Referrer-Policy: strict-origin-when-cross-origin');
+        }
     }
     
     /**
@@ -79,11 +93,16 @@ class EP_Instant_Search {
                 set_transient($settings_key, $settings, HOUR_IN_SECONDS);
             }
             
+            // Use secure version if it exists, otherwise fallback
+            $script_file = file_exists(plugin_dir_path(__FILE__) . 'assets/instant-search-secure.js') 
+                ? 'assets/instant-search-secure.js' 
+                : 'assets/instant-search.js';
+            
             wp_enqueue_script(
                 'ep-instant-search-js',
-                plugin_dir_url(__FILE__) . 'assets/instant-search.js',
+                plugin_dir_url(__FILE__) . $script_file,
                 array('jquery'),
-                '2.3.2', // Smooth spinner animation
+                '3.0.0', // Security hardened version
                 true
             );
             
@@ -92,12 +111,45 @@ class EP_Instant_Search {
     }
     
     /**
-     * Handle AJAX search request
+     * Handle AJAX search request with enhanced security
      */
     public function handle_search() {
-        $search_term = sanitize_text_field($_GET['q'] ?? '');
+        // Rate limiting check
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $rate_limit_key = 'ep_search_rate_' . md5($ip);
+        $requests = get_transient($rate_limit_key);
         
+        if ($requests && $requests > 10) {
+            // More than 10 requests in 60 seconds
+            wp_send_json_error('Rate limit exceeded', 429);
+            exit;
+        }
+        
+        set_transient($rate_limit_key, ($requests ? $requests + 1 : 1), 60);
+        
+        // Verify nonce if provided (optional for public search)
+        if (isset($_GET['nonce']) && !wp_verify_nonce($_GET['nonce'], 'wp_rest')) {
+            // Log potential security issue but don't block public search
+            error_log('EP Instant Search: Invalid nonce provided');
+        }
+        
+        // Sanitize and validate search term
+        $search_term = isset($_GET['q']) ? sanitize_text_field($_GET['q']) : '';
+        
+        // Remove any remaining HTML tags
+        $search_term = wp_strip_all_tags($search_term);
+        
+        // Limit search term length
+        $search_term = substr($search_term, 0, 100);
+        
+        // Minimum length check
         if (empty($search_term) || strlen($search_term) < 2) {
+            wp_send_json(array());
+            exit;
+        }
+        
+        // Maximum length check
+        if (strlen($search_term) > 100) {
             wp_send_json(array());
             exit;
         }
@@ -232,15 +284,16 @@ class EP_Instant_Search {
                 $post_id = $post->ID;
                 
                 $result = array(
-                    'id' => $post_id,
-                    'title' => html_entity_decode($post->post_title),
-                    'url' => get_permalink($post_id),
-                    'type' => $post_type,
+                    'id' => intval($post_id),
+                    'title' => wp_strip_all_tags(html_entity_decode($post->post_title)),
+                    'url' => esc_url(get_permalink($post_id)),
+                    'type' => sanitize_key($post_type),
                 );
                 
                 // Add image for all post types if enabled
                 if ($show_image) {
-                    $result['image'] = get_the_post_thumbnail_url($post_id, 'thumbnail');
+                    $image_url = get_the_post_thumbnail_url($post_id, 'thumbnail');
+                    $result['image'] = $image_url ? esc_url($image_url) : '';
                 }
                 
                 // Handle WooCommerce products specifically
@@ -258,7 +311,7 @@ class EP_Instant_Search {
                         }
                         
                         if ($show_sku && $sku = $product->get_sku()) {
-                            $result['sku'] = $sku;
+                            $result['sku'] = sanitize_text_field($sku);
                         }
                         
                         $result['in_stock'] = $product->is_in_stock();
@@ -279,7 +332,7 @@ class EP_Instant_Search {
                         // Use post_excerpt directly from the post object
                         $excerpt = !empty($post->post_excerpt) ? $post->post_excerpt : wp_trim_words($post->post_content, 30);
                         if ($excerpt) {
-                            $result['excerpt'] = wp_trim_words($excerpt, 15);
+                            $result['excerpt'] = wp_strip_all_tags(wp_trim_words($excerpt, 15));
                         }
                     }
                 }
