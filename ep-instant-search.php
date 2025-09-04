@@ -65,12 +65,14 @@ class EP_Instant_Search {
             if (false === $settings) {
                 $settings = array(
                     'ajax_url' => admin_url('admin-ajax.php'),
+                    'rest_url' => rest_url('elasticpress/v1/search'),
+                    'nonce' => wp_create_nonce('wp_rest'),
                     'min_chars' => intval(get_option('ep_instant_search_min_chars', 2)),
                     'max_results' => intval(get_option('ep_instant_search_max_results', 8)),
                     'show_price' => get_option('ep_instant_search_show_price', 'yes'),
                     'show_image' => get_option('ep_instant_search_show_image', 'yes'),
                     'show_sku' => get_option('ep_instant_search_show_sku', 'no'),
-                    'search_delay' => intval(get_option('ep_instant_search_delay', 100)),
+                    'search_delay' => intval(get_option('ep_instant_search_delay', 300)),
                     'selectors' => get_option('ep_instant_search_selectors', '.search-field, input[name="s"], .dgwt-wcas-search-input'),
                     'debug' => defined('WP_DEBUG') && WP_DEBUG
                 );

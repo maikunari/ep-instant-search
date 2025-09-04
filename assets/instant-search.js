@@ -28,6 +28,22 @@
     // Cache DOM queries
     var cache = {};
     var activeRequests = {};
+    var abortController = null;
+    
+    // Debounce function for search
+    function debounce(func, wait) {
+        var timeout;
+        return function executedFunction() {
+            var context = this;
+            var args = arguments;
+            var later = function() {
+                timeout = null;
+                func.apply(context, args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
     
     // Initialize on DOM ready
     $(document).ready(function() {
@@ -66,7 +82,6 @@
         var $form = $input.closest('form');
         var $parent = $form.length ? $form : $input.parent();
         var $resultsBox = $('<div class="ep-instant-results" aria-live="polite" role="listbox"></div>');
-        var searchTimeout;
         var lastQuery = '';
         var currentRequest;
         
@@ -86,12 +101,21 @@
         
         $resultsBox.attr('id', 'ep-results-' + $input.index());
         
+        // Create debounced search function
+        var debouncedSearch = debounce(function(query) {
+            performSearch(query);
+        }, ep_instant_search.search_delay || 300);
+        
         function handleInput(e) {
             var query = $input.val().trim();
             
-            clearTimeout(searchTimeout);
+            // Cancel any pending search
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+            }
             
-            // Abort previous request
+            // Abort previous AJAX request if using fallback
             if (currentRequest && currentRequest.abort) {
                 currentRequest.abort();
             }
@@ -118,10 +142,8 @@
                     .addClass('active');
             }
             
-            // Perform search after very short delay
-            searchTimeout = setTimeout(function() {
-                performSearch(query);
-            }, 100); // Even shorter delay since we show spinner immediately
+            // Perform debounced search
+            debouncedSearch(query);
         }
         
         function handleKeydown(e) {
@@ -192,12 +214,118 @@
                 return;
             }
             
+            // Cancel previous request if still pending
+            if (abortController) {
+                abortController.abort();
+            }
+            
+            // Create new AbortController for this request
+            abortController = new AbortController();
+            
+            // Prepare REST API request data
+            var requestData = {
+                s: query,
+                post_type: 'product',
+                per_page: ep_instant_search.max_results || 20,
+                search_fields: [
+                    'post_title',
+                    'post_content', 
+                    'meta._sku',
+                    'meta._variations_skus'
+                ]
+            };
+            
+            // Build REST API URL
+            var restUrl = (window.location.origin || '') + '/wp-json/elasticpress/v1/search';
+            
+            log('Making REST API request to:', restUrl);
+            log('Request data:', requestData);
+            
+            // Use fetch for REST API call
+            fetch(restUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': ep_instant_search.nonce || '',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(requestData),
+                signal: abortController.signal,
+                credentials: 'same-origin'
+            })
+            .then(function(response) {
+                // Check if response is ok (status in the range 200-299)
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.status + ' ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                log('REST API response received:', data);
+                
+                // Handle different response structures
+                var results = [];
+                
+                // Check if data has a specific structure
+                if (data && Array.isArray(data)) {
+                    results = data;
+                } else if (data && data.data && Array.isArray(data.data)) {
+                    results = data.data;
+                } else if (data && data.posts && Array.isArray(data.posts)) {
+                    results = data.posts;
+                } else {
+                    console.error('Unexpected REST API response structure:', data);
+                    $resultsBox.html('<div class="no-results">Unexpected response format.</div>').addClass('active');
+                    return;
+                }
+                
+                // Transform REST API response to match expected format
+                var transformedResults = results.map(function(item) {
+                    return {
+                        id: item.id || item.ID,
+                        title: item.title?.rendered || item.post_title || item.title || '',
+                        url: item.link || item.permalink || '#',
+                        type: item.type || item.post_type || 'product',
+                        price: item.meta?.price || item.price || '',
+                        price_html: item.meta?.price_html || item.price_html || '',
+                        image: item.featured_media_url || item.thumbnail || item.image || '',
+                        sku: item.meta?._sku || item.sku || '',
+                        in_stock: item.meta?.in_stock !== false,
+                        excerpt: item.excerpt?.rendered || item.excerpt || ''
+                    };
+                });
+                
+                // Cache for 1 minute
+                cache[cacheKey] = transformedResults;
+                setTimeout(function() {
+                    delete cache[cacheKey];
+                }, 60000);
+                
+                displayResults(transformedResults);
+                abortController = null;
+            })
+            .catch(function(error) {
+                // Don't show error for aborted requests
+                if (error.name === 'AbortError') {
+                    log('Request aborted');
+                    return;
+                }
+                
+                log('REST API error:', error);
+                console.error('REST API Error Details:', error);
+                
+                // Fallback to AJAX if REST fails
+                log('Falling back to AJAX endpoint');
+                performSearchAjaxFallback(query);
+            });
+        }
+        
+        // Fallback function using original AJAX
+        function performSearchAjaxFallback(query) {
             var requestData = {
                 action: 'ep_instant_search',
                 q: query
             };
-            
-            log('Making AJAX request to:', ep_instant_search.ajax_url);
             
             currentRequest = $.ajax({
                 url: ep_instant_search.ajax_url,
@@ -205,11 +333,11 @@
                 dataType: 'json',
                 data: requestData,
                 success: function(response) {
-                    log('Search response received:', response);
-                    // Handle the direct array response
+                    log('AJAX fallback response received:', response);
                     var results = response;
                     
                     // Cache for 1 minute
+                    var cacheKey = 'search_' + query;
                     cache[cacheKey] = results;
                     setTimeout(function() {
                         delete cache[cacheKey];
@@ -219,8 +347,7 @@
                 },
                 error: function(xhr, status, error) {
                     if (status !== 'abort') {
-                        log('Search error:', status, error);
-                        console.error('AJAX Error Details:', xhr.responseText);
+                        log('AJAX fallback error:', status, error);
                         $resultsBox.html('<div class="no-results">Search error. Please try again.</div>').addClass('active');
                     }
                 },
