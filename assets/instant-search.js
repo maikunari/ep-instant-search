@@ -260,7 +260,10 @@
                 if (item.type === 'product') {
                     // Product-specific display
                     if (ep_instant_search.show_price === 'yes' && item.price) {
-                        html += '<span class="product-price">' + item.price + '</span>';
+                        // Price often contains HTML from WooCommerce (sale prices, etc)
+                        // We need to allow this HTML but strip any scripts
+                        var safePrice = item.price.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+                        html += '<span class="product-price">' + safePrice + '</span>';
                     }
                     
                     if (ep_instant_search.show_sku === 'yes' && item.sku) {

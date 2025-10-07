@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test ElasticPress Instant Search</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .test-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+        }
+        .debug-output {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .results-display {
+            margin-top: 20px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>Test ElasticPress Instant Search</h1>
+        
+        <input type="text" id="test-search" placeholder="Type to search...">
+        
+        <div class="debug-output" id="debug"></div>
+        <div class="results-display" id="results"></div>
+        
+        <script>
+        $(document).ready(function() {
+            var $input = $('#test-search');
+            var $debug = $('#debug');
+            var $results = $('#results');
+            var timeout;
+            
+            $input.on('input', function() {
+                clearTimeout(timeout);
+                var query = $(this).val();
+                
+                if (query.length < 2) {
+                    $debug.text('Query too short');
+                    $results.empty();
+                    return;
+                }
+                
+                timeout = setTimeout(function() {
+                    $debug.text('Searching for: ' + query);
+                    
+                    $.ajax({
+                        url: '/wp-admin/admin-ajax.php',
+                        type: 'GET',
+                        dataType: 'json',
+                        data: {
+                            action: 'ep_instant_search',
+                            q: query
+                        },
+                        success: function(response) {
+                            $debug.text('Response:\n' + JSON.stringify(response, null, 2));
+                            
+                            if (!response || response.length === 0) {
+                                $results.html('<p>No results found</p>');
+                                return;
+                            }
+                            
+                            var html = '<h3>Results:</h3><ul>';
+                            
+                            response.forEach(function(item) {
+                                html += '<li>';
+                                html += '<strong>Title:</strong> ' + (item.title || 'No title') + '<br>';
+                                html += '<strong>URL:</strong> ' + (item.url || 'No URL') + '<br>';
+                                
+                                if (item.price) {
+                                    html += '<strong>Price (raw):</strong> <code>' + escapeHtml(item.price) + '</code><br>';
+                                    html += '<strong>Price (rendered):</strong> ' + item.price + '<br>';
+                                }
+                                
+                                if (item.sku) {
+                                    html += '<strong>SKU:</strong> ' + item.sku + '<br>';
+                                }
+                                
+                                if (item.image) {
+                                    html += '<strong>Image URL:</strong> ' + item.image + '<br>';
+                                }
+                                
+                                html += '</li>';
+                            });
+                            
+                            html += '</ul>';
+                            $results.html(html);
+                        },
+                        error: function(xhr, status, error) {
+                            $debug.text('Error: ' + error + '\n' + xhr.responseText);
+                        }
+                    });
+                }, 300);
+            });
+            
+            function escapeHtml(text) {
+                var map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return text ? String(text).replace(/[&<>"']/g, function(m) { return map[m]; }) : '';
+            }
+        });
+        </script>
+    </div>
+</body>
+</html>
