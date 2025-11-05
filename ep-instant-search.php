@@ -3,7 +3,7 @@
  * Plugin Name: ElasticPress Instant Search
  * Plugin URI: https://github.com/maikunari/ep-instant-search
  * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Prevents ElasticPress from breaking product archives.
- * Version: 2.10.0
+ * Version: 2.10.1
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -73,10 +73,13 @@ class EP_Instant_Search {
         // Add global filter for variation SKU search
         add_filter('ep_formatted_args', array($this, 'modify_search_for_skus'), 100, 3);
 
-        // Archive protection: Only disable ElasticPress on product archives
-        // Use pre_get_posts to set a flag BEFORE ElasticPress checks ep_skip_query_integration
-        add_action('pre_get_posts', array($this, 'mark_product_archives'), 5);
-        add_filter('ep_skip_query_integration', array($this, 'skip_elasticpress_for_product_archives'), 10, 2);
+        // DISABLED: Archive protection still causing 503 errors
+        // The issue is likely that WooCommerce functions like is_shop() aren't available early enough
+        // Will need to implement this differently - perhaps with a later hook like 'wp' or 'template_redirect'
+        // For now, plugin works for instant search without archive protection
+
+        // add_action('pre_get_posts', array($this, 'mark_product_archives'), 5);
+        // add_filter('ep_skip_query_integration', array($this, 'skip_elasticpress_for_product_archives'), 10, 2);
     }
 
     /**
@@ -254,7 +257,7 @@ class EP_Instant_Search {
                 'ep-instant-search-js',
                 plugin_dir_url(__FILE__) . 'assets/instant-search.js',
                 array('jquery'),
-                '2.10.0',
+                '2.10.1',
                 true
             );
             
