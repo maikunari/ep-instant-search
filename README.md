@@ -274,7 +274,14 @@ GPL v2 or later
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
-### Latest: 2.9.1 (2025-11-05)
+### Latest: 2.9.2 (2025-11-05)
+
+**Important Change:**
+- Temporarily disabled archive protection feature due to compatibility issues
+- Plugin now operates as pure instant search without query modification
+- Instant search functionality fully operational
+
+### 2.9.1 (2025-11-05)
 
 **Critical Bug Fix:**
 - Fixed 503 error on plugin activation
