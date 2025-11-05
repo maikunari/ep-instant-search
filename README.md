@@ -274,12 +274,15 @@ GPL v2 or later
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
-### Latest: 2.9.2 (2025-11-05)
+### Latest: 2.10.0 (2025-11-05)
 
-**Important Change:**
-- Temporarily disabled archive protection feature due to compatibility issues
-- Plugin now operates as pure instant search without query modification
-- Instant search functionality fully operational
+**Archive Protection Re-Implemented (Properly!):**
+- Fixed archive protection using proper WordPress hooks
+- Uses `pre_get_posts` to mark product archives BEFORE ElasticPress checks
+- Only targets WooCommerce product pages (archives, categories, shop)
+- Search queries still use Elasticsearch for speed
+- Product archives use MySQL for reliability
+- No interference with other page types
 
 ### 2.9.1 (2025-11-05)
 

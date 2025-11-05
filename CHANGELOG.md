@@ -5,6 +5,28 @@ All notable changes to ElasticPress Instant Search will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2025-11-05
+
+### Fixed
+- **MAJOR**: Re-implemented archive protection with proper WordPress approach
+- Uses `pre_get_posts` hook to mark product archive queries BEFORE ElasticPress checks
+- Only targets specific WooCommerce queries: product archives, categories, tags, shop page
+- Doesn't interfere with search queries, admin queries, or other page types
+- Uses query-specific flag (`ep_instant_skip_integration`) instead of global logic
+
+### Technical Details
+- `mark_product_archives()` runs at priority 5 on `pre_get_posts` (before ElasticPress)
+- Sets custom query var on product archive queries only
+- `skip_elasticpress_for_product_archives()` checks for this flag
+- Returns original `$skip` value if flag not present (no interference)
+- Comprehensive debug logging to track which queries use MySQL vs Elasticsearch
+
+### Result
+- ✅ Search queries → Elasticsearch (fast, relevant)
+- ✅ Product archives/categories → MySQL (reliable, complete)
+- ✅ Other pages → ElasticPress decides (no interference)
+- ✅ No site crashes or compatibility issues
+
 ## [2.9.2] - 2025-11-05
 
 ### Changed
