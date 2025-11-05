@@ -3,7 +3,7 @@
  * Plugin Name: ElasticPress Instant Search
  * Plugin URI: https://github.com/maikunari/ep-instant-search
  * Description: SUPER DIAGNOSTIC VERSION - Logs every initialization step
- * Version: 2.14.0-diagnostic
+ * Version: 2.14.1-diagnostic-full
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -192,9 +192,170 @@ class EP_Instant_Search {
     }
 
     public function handle_search() {
-        diagnostic_log("handle_search: Called");
-        // Minimal implementation for diagnostic purposes
-        wp_send_json(array());
+        diagnostic_log("handle_search: START");
+
+        try {
+            // CRITICAL: Enable ElasticPress for AJAX requests
+            add_filter('ep_ajax_wp_query_integration', '__return_true');
+            add_filter('ep_enable_do_weighting', '__return_true');
+            diagnostic_log("handle_search: ElasticPress AJAX filters added");
+
+            $search_term = sanitize_text_field($_GET['q'] ?? '');
+            diagnostic_log("handle_search: Search term = " . $search_term);
+
+            if (empty($search_term) || strlen($search_term) < 2) {
+                diagnostic_log("handle_search: Search term too short, returning empty");
+                wp_send_json(array());
+                exit;
+            }
+
+            // Check if ElasticPress is active
+            if (!defined('EP_VERSION')) {
+                diagnostic_log("handle_search: ERROR - ElasticPress not active");
+                wp_send_json(array());
+                exit;
+            }
+
+            diagnostic_log("handle_search: ElasticPress version " . EP_VERSION);
+
+            // Try to get cached results first
+            $cache_key = 'ep_search_' . md5($search_term . '_' . get_locale());
+            $cached_results = wp_cache_get($cache_key, 'ep_instant_search');
+
+            if (false !== $cached_results) {
+                diagnostic_log("handle_search: Returning cached results");
+                wp_send_json($cached_results);
+                exit;
+            }
+
+            // Set up the query to use ElasticPress
+            $args = array(
+                'post_type' => array('product', 'post', 'page'),
+                'post_status' => 'publish',
+                's' => $search_term,
+                'posts_per_page' => intval(get_option('ep_instant_search_max_results', 8)),
+                'cache_results' => true,
+                'update_post_meta_cache' => true,
+                'update_post_term_cache' => false,
+                'ep_integrate' => true,
+            );
+
+            diagnostic_log("handle_search: Query args prepared");
+
+            // Allow filtering of search args
+            $args = apply_filters('ep_instant_search_query_args', $args, $search_term);
+
+            diagnostic_log("handle_search: Running WP_Query...");
+
+            // Perform the query
+            $query = new WP_Query($args);
+
+            diagnostic_log("handle_search: WP_Query complete - found " . $query->found_posts . " posts");
+
+            $results = array();
+
+            if ($query->have_posts()) {
+                diagnostic_log("handle_search: Processing results");
+
+                $show_price = get_option('ep_instant_search_show_price', 'yes') === 'yes';
+                $show_image = get_option('ep_instant_search_show_image', 'yes') === 'yes';
+                $show_sku = get_option('ep_instant_search_show_sku', 'no') === 'yes';
+
+                // Pre-load all WooCommerce products in one query
+                $product_ids = array();
+                foreach ($query->posts as $post) {
+                    if ($post->post_type === 'product') {
+                        $product_ids[] = $post->ID;
+                    }
+                }
+
+                diagnostic_log("handle_search: Found " . count($product_ids) . " products");
+
+                // Bulk load products
+                $products_map = array();
+                if (!empty($product_ids) && function_exists('wc_get_products')) {
+                    $products = wc_get_products(array(
+                        'include' => $product_ids,
+                        'limit' => -1,
+                    ));
+                    foreach ($products as $product) {
+                        $products_map[$product->get_id()] = $product;
+                    }
+                    diagnostic_log("handle_search: Loaded " . count($products_map) . " WooCommerce products");
+                }
+
+                foreach ($query->posts as $post) {
+                    $post_type = $post->post_type;
+                    $post_id = $post->ID;
+
+                    $result = array(
+                        'id' => $post_id,
+                        'title' => html_entity_decode($post->post_title),
+                        'url' => get_permalink($post_id),
+                        'type' => $post_type,
+                    );
+
+                    // Add image for all post types if enabled
+                    if ($show_image) {
+                        $result['image'] = get_the_post_thumbnail_url($post_id, 'thumbnail');
+                    }
+
+                    // Handle WooCommerce products specifically
+                    if ($post_type === 'product' && isset($products_map[$post_id])) {
+                        $product = $products_map[$post_id];
+
+                        if ($product && !$product->is_visible()) {
+                            continue; // Skip hidden products
+                        }
+
+                        if ($product) {
+                            // Add product-specific data
+                            if ($show_price) {
+                                $result['price'] = $product->get_price_html();
+                            }
+
+                            if ($show_sku && $sku = $product->get_sku()) {
+                                $result['sku'] = $sku;
+                            }
+
+                            $result['in_stock'] = $product->is_in_stock();
+
+                            // Use product image if no featured image
+                            if ($show_image && !$result['image']) {
+                                $image_id = $product->get_image_id();
+                                $result['image'] = $image_id ? wp_get_attachment_image_url($image_id, 'thumbnail') : wc_placeholder_img_src('thumbnail');
+                            }
+                        }
+                    } else {
+                        // For non-products, add post type label
+                        $post_type_obj = get_post_type_object($post_type);
+                        $result['type_label'] = $post_type_obj ? $post_type_obj->labels->singular_name : $post_type;
+
+                        // Add excerpt for posts/pages
+                        if (in_array($post_type, array('post', 'page'))) {
+                            $excerpt = !empty($post->post_excerpt) ? $post->post_excerpt : wp_trim_words($post->post_content, 30);
+                            if ($excerpt) {
+                                $result['excerpt'] = wp_trim_words($excerpt, 15);
+                            }
+                        }
+                    }
+
+                    $results[] = $result;
+                }
+            }
+
+            diagnostic_log("handle_search: Returning " . count($results) . " results");
+
+            // Cache results for 5 minutes
+            wp_cache_set($cache_key, $results, 'ep_instant_search', 300);
+
+            // Return results
+            wp_send_json($results);
+
+        } catch (Exception $e) {
+            diagnostic_log("handle_search: EXCEPTION - " . $e->getMessage());
+            wp_send_json(array());
+        }
     }
 
     public function add_inline_styles() {
