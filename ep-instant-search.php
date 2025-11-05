@@ -1,10 +1,11 @@
 <?php
 /**
  * Plugin Name: ElasticPress Instant Search
- * Plugin URI: https://friendlyfires.ca
- * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs.
- * Version: 2.6.0
- * Author: Friendly Fires
+ * Plugin URI: https://github.com/maikunari/ep-instant-search
+ * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Prevents ElasticPress from hijacking product archives.
+ * Version: 2.9.0
+ * Author: Mike Sewell
+ * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
  */
 
@@ -14,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 class EP_Instant_Search {
-    
+
     /**
      * Initialize the plugin
      */
@@ -24,10 +25,39 @@ class EP_Instant_Search {
         add_action('wp_ajax_ep_instant_search', array($this, 'handle_search'));
         add_action('wp_ajax_nopriv_ep_instant_search', array($this, 'handle_search'));
         add_action('wp_head', array($this, 'add_inline_styles'));
-        
+
         // Admin settings
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
+    }
+
+    /**
+     * Conditional debug logging - only logs when WP_DEBUG is enabled
+     *
+     * @param string $message Message to log
+     */
+    private function debug_log($message) {
+        // Only log if WP_DEBUG is enabled
+        if (!defined('WP_DEBUG') || !WP_DEBUG) {
+            return;
+        }
+
+        $log_file = WP_CONTENT_DIR . '/ep-instant-debug.txt';
+
+        // Check if file is writable or can be created
+        if (!file_exists($log_file) && !is_writable(WP_CONTENT_DIR)) {
+            return;
+        }
+
+        // Prevent log file from growing too large (max 1MB)
+        if (file_exists($log_file) && filesize($log_file) > 1048576) {
+            // Rotate log: keep last 50% of file
+            $content = file_get_contents($log_file);
+            $content = substr($content, strlen($content) / 2);
+            file_put_contents($log_file, $content);
+        }
+
+        file_put_contents($log_file, $message . "\n", FILE_APPEND | LOCK_EX);
     }
     
     /**
@@ -39,27 +69,52 @@ class EP_Instant_Search {
             add_action('admin_notices', array($this, 'elasticpress_missing_notice'));
             return;
         }
-        
+
+        // Disable ElasticPress for product archives, keep it for search only
+        // This prevents ElasticPress from hijacking WP_Query on archive/category pages
+        add_filter('ep_skip_query_integration', array($this, 'skip_elasticpress_for_archives'), 10, 2);
+
         // Add global filter for variation SKU search
         add_filter('ep_formatted_args', array($this, 'modify_search_for_skus'), 100, 3);
+    }
+
+    /**
+     * Skip ElasticPress for non-search queries (archives, categories, etc)
+     * Only use ElasticPress for actual search queries
+     */
+    public function skip_elasticpress_for_archives($skip, $query) {
+        // Only use ElasticPress for actual search queries
+        if ($query->is_search()) {
+            return false; // Use ElasticPress for search
+        }
+
+        // For everything else (archives, categories, shop pages, etc), use MySQL
+        return true; // Skip ElasticPress, use default WordPress query
     }
     
     /**
      * Modify ElasticPress query to search variation SKUs
      */
     public function modify_search_for_skus($formatted_args, $args, $wp_query) {
-        // Log for debugging
-        $log_file = WP_CONTENT_DIR . '/ep-instant-debug.txt';
-        file_put_contents($log_file, "GLOBAL FILTER: ep_formatted_args triggered\n", FILE_APPEND);
+        $this->debug_log("GLOBAL FILTER: ep_formatted_args triggered");
 
         // Only modify if this is a search query with a search term
         if (empty($args['s']) || !isset($formatted_args['query'])) {
-            file_put_contents($log_file, "Skipping - no search term or query\n", FILE_APPEND);
+            $this->debug_log("Skipping - no search term or query");
             return $formatted_args;
         }
 
         $search_term = $args['s'];
-        file_put_contents($log_file, "Search term: {$search_term}\n", FILE_APPEND);
+        $this->debug_log("Search term: {$search_term}");
+
+        // Check if this looks like a SKU search (contains hyphen, underscore, or is short alphanumeric)
+        $is_sku_search = preg_match('/[-_]/', $search_term) || (strlen($search_term) <= 10 && preg_match('/^[a-z0-9]+$/i, $search_term));
+
+        // Only apply SKU boosting for actual SKU-like searches
+        if (!$is_sku_search) {
+            $this->debug_log("Not a SKU search - using default query");
+            return $formatted_args;
+        }
 
         // Keep the original query
         $original_query = $formatted_args['query'];
@@ -68,7 +123,7 @@ class EP_Instant_Search {
         $search_upper = strtoupper($search_term);
         $search_lower = strtolower($search_term);
 
-        file_put_contents($log_file, "MODIFYING QUERY to include variation SKU search\n", FILE_APPEND);
+        $this->debug_log("SKU search detected - MODIFYING QUERY to include variation SKU search");
 
         // Create a bool query that includes both the original query AND variation SKU matching
         $formatted_args['query'] = array(
@@ -126,7 +181,7 @@ class EP_Instant_Search {
             )
         );
 
-        file_put_contents($log_file, "Query modified successfully\n", FILE_APPEND);
+        $this->debug_log("Query modified successfully");
 
         return $formatted_args;
     }
@@ -171,7 +226,7 @@ class EP_Instant_Search {
                 'ep-instant-search-js',
                 plugin_dir_url(__FILE__) . 'assets/instant-search.js',
                 array('jquery'),
-                '2.5.0',
+                '2.9.0',
                 true
             );
             
@@ -187,46 +242,50 @@ class EP_Instant_Search {
         add_filter('ep_ajax_wp_query_integration', '__return_true');
         add_filter('ep_enable_do_weighting', '__return_true');
 
-        // CUSTOM DEBUG - write to a file we control
-        $log_file = WP_CONTENT_DIR . '/ep-instant-debug.txt';
-        $log_msg = "\n" . date('Y-m-d H:i:s') . " - New search request\n";
-        file_put_contents($log_file, $log_msg, FILE_APPEND);
+        $this->debug_log("\n" . date('Y-m-d H:i:s') . " - New search request");
 
         $search_term = sanitize_text_field($_GET['q'] ?? '');
-        file_put_contents($log_file, "Search term: {$search_term}\n", FILE_APPEND);
-        
+        $this->debug_log("Search term: {$search_term}");
+
         if (empty($search_term) || strlen($search_term) < 2) {
-            file_put_contents($log_file, "Search term too short, exiting\n", FILE_APPEND);
+            $this->debug_log("Search term too short, exiting");
             wp_send_json(array());
             exit;
         }
-        
+
         // Check if this looks like a SKU search (contains hyphen or underscore)
         $is_sku_search = preg_match('/[-_]/', $search_term);
-        file_put_contents($log_file, "Is SKU search: " . ($is_sku_search ? 'YES' : 'NO') . "\n", FILE_APPEND);
-        
+        $this->debug_log("Is SKU search: " . ($is_sku_search ? 'YES' : 'NO'));
+
         // Check if ElasticPress is active
         if (!defined('EP_VERSION')) {
-            file_put_contents($log_file, "ElasticPress not active!\n", FILE_APPEND);
+            $this->debug_log("ElasticPress not active!");
             wp_send_json(array());
             exit;
         }
-        
-        file_put_contents($log_file, "ElasticPress version: " . EP_VERSION . "\n", FILE_APPEND);
+
+        $this->debug_log("ElasticPress version: " . EP_VERSION);
 
         // Try to get cached results first
         $cache_key = 'ep_search_' . md5($search_term . '_' . get_locale());
         $cached_results = wp_cache_get($cache_key, 'ep_instant_search');
 
         if (false !== $cached_results) {
-            file_put_contents($log_file, "Returning cached results\n", FILE_APPEND);
+            $this->debug_log("Returning cached results");
             wp_send_json($cached_results);
             exit;
         }
-        
+
+        // Check what post types ElasticPress will search
+        if (function_exists('ep_get_indexable_post_types')) {
+            $ep_post_types = ep_get_indexable_post_types();
+            $this->debug_log("EP indexable post types: " . implode(', ', $ep_post_types));
+        }
+
         // Set up the query to use ElasticPress
+        // Use 'any' to search all post types configured in ElasticPress
         $args = array(
-            'post_type' => array('product', 'post', 'page'),
+            'post_type' => 'any',
             'post_status' => 'publish',
             's' => $search_term,
             'posts_per_page' => intval(get_option('ep_instant_search_max_results', 8)),
@@ -235,31 +294,46 @@ class EP_Instant_Search {
             'update_post_term_cache' => false,
             'ep_integrate' => true,
         );
-        
-        file_put_contents($log_file, "Query args set up\n", FILE_APPEND);
+
+        $this->debug_log("Query args set up");
 
         // Allow filtering of search args (for customization if needed)
         $args = apply_filters('ep_instant_search_query_args', $args, $search_term);
 
-        file_put_contents($log_file, "Running WP_Query with ElasticPress integration...\n", FILE_APPEND);
+        $this->debug_log("Running WP_Query with ElasticPress integration...");
 
         // Perform the query - ElasticPress will now integrate thanks to ep_ajax_wp_query_integration filter
         $query = new WP_Query($args);
 
         // Debug: Log if ElasticPress actually ran
         $ep_success = property_exists($query, 'elasticsearch_success') ? ($query->elasticsearch_success ? 'Yes' : 'No') : 'Unknown';
-        file_put_contents($log_file, "EP Integration Success: {$ep_success}\n", FILE_APPEND);
-        file_put_contents($log_file, "Found posts: {$query->found_posts}\n", FILE_APPEND);
-        
-        $results = array();
-        
+        $this->debug_log("EP Integration Success: {$ep_success}");
+        $this->debug_log("Found posts: {$query->found_posts}");
+
+        // Debug: Log post types found and ALL titles
         if ($query->have_posts()) {
-            file_put_contents($log_file, "Processing {$query->post_count} posts\n", FILE_APPEND);
-            
+            $post_types_found = array();
+            $all_titles = array();
+            foreach ($query->posts as $post) {
+                if (!isset($post_types_found[$post->post_type])) {
+                    $post_types_found[$post->post_type] = 0;
+                }
+                $post_types_found[$post->post_type]++;
+                $all_titles[] = $post->post_type . ': ' . $post->post_title;
+            }
+            $this->debug_log("Post types in results: " . json_encode($post_types_found));
+            $this->debug_log("All titles returned:\n" . implode("\n", $all_titles));
+        }
+
+        $results = array();
+
+        if ($query->have_posts()) {
+            $this->debug_log("Processing {$query->post_count} posts");
+
             $show_price = get_option('ep_instant_search_show_price', 'yes') === 'yes';
             $show_image = get_option('ep_instant_search_show_image', 'yes') === 'yes';
             $show_sku = get_option('ep_instant_search_show_sku', 'no') === 'yes';
-            
+
             // Pre-load all WooCommerce products in one query if needed
             $product_ids = array();
             foreach ($query->posts as $post) {
@@ -267,8 +341,8 @@ class EP_Instant_Search {
                     $product_ids[] = $post->ID;
                 }
             }
-            
-            file_put_contents($log_file, "Product IDs: " . implode(',', $product_ids) . "\n", FILE_APPEND);
+
+            $this->debug_log("Product IDs: " . implode(',', $product_ids));
             
             // Bulk load products if we have any
             $products_map = array();
@@ -285,7 +359,9 @@ class EP_Instant_Search {
             foreach ($query->posts as $post) {
                 $post_type = $post->post_type;
                 $post_id = $post->ID;
-                
+
+                $this->debug_log("Processing post ID {$post_id}, type: {$post_type}, title: {$post->post_title}");
+
                 $result = array(
                     'id' => $post_id,
                     'title' => html_entity_decode($post->post_title),
@@ -341,8 +417,8 @@ class EP_Instant_Search {
                 $results[] = $result;
             }
         }
-        
-        file_put_contents($log_file, "Returning " . count($results) . " results\n", FILE_APPEND);
+
+        $this->debug_log("Returning " . count($results) . " results");
 
         // Cache results for 5 minutes
         wp_cache_set($cache_key, $results, 'ep_instant_search', 300);
@@ -356,6 +432,9 @@ class EP_Instant_Search {
      */
     public function add_inline_styles() {
         $custom_css = get_option('ep_instant_search_custom_css', '');
+
+        // Sanitize custom CSS - strip all tags and allow only safe CSS properties
+        $custom_css = wp_strip_all_tags($custom_css);
         ?>
         <style>
             .ep-instant-results {
@@ -539,8 +618,14 @@ class EP_Instant_Search {
                     margin-top: 5px;
                 }
             }
-            
-            <?php echo esc_html($custom_css); ?>
+
+            <?php
+            // Output sanitized custom CSS
+            // Already sanitized with wp_strip_all_tags above, safe to echo
+            if (!empty($custom_css)) {
+                echo "\n" . $custom_css . "\n";
+            }
+            ?>
         </style>
         <?php
     }

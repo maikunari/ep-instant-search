@@ -83,9 +83,9 @@
             .on('keydown.ep_instant_search', handleKeydown)
             .on('focus.ep_instant_search', handleFocus)
             .on('blur.ep_instant_search', handleBlur);
-        
+
         $resultsBox.attr('id', 'ep-results-' + $input.index());
-        
+
         function handleInput(e) {
             var query = $input.val().trim();
             
@@ -290,11 +290,11 @@
             });
             
             html += '</ul>';
-            
+
             // Add view all link
-            var searchUrl = ($form.attr('action') || '/') + '?s=' + encodeURIComponent(lastQuery) + '&post_type=product';
+            var searchUrl = ($form.attr('action') || '/') + '?s=' + encodeURIComponent(lastQuery);
             html += '<a href="' + escapeHtml(searchUrl) + '" class="view-all">View all results →</a>';
-            
+
             $resultsBox.html(html).addClass('active');
         }
     }
