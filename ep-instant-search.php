@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: ElasticPress Instant Search (DEBUG STEP 3)
+ * Plugin Name: ElasticPress Instant Search (DEBUG STEP 4)
  * Plugin URI: https://github.com/maikunari/ep-instant-search
- * Description: DEBUG STEP 3 - Testing filter registration with has_filter check
- * Version: 2.12.4-debug-step3
+ * Description: DEBUG STEP 4 - Testing actual search logic with is_search and is_main_query
+ * Version: 2.12.5-debug-step4
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -53,7 +53,23 @@ class EP_Instant_Search {
      * Modern method: Force ElasticPress via ep_elasticpress_enabled filter
      */
     public function force_ep_for_search($enabled, $query) {
-        // Just return the value - don't actually modify anything yet
+        // Add safety checks before using query methods
+        if (!$query || !is_object($query)) {
+            return $enabled;
+        }
+
+        // Check if this is a search query
+        // Using method_exists to prevent fatal errors
+        if (!method_exists($query, 'is_main_query') || !method_exists($query, 'get')) {
+            return $enabled;
+        }
+
+        // Only enable for frontend search queries
+        if (is_search() && $query->is_main_query() && !is_admin()) {
+            $this->search_forced = true; // Track for debug notice
+            return true;
+        }
+
         return $enabled;
     }
 
@@ -61,7 +77,21 @@ class EP_Instant_Search {
      * Legacy method: Force ElasticPress via pre_get_posts
      */
     public function force_ep_for_search_legacy($query) {
-        // Don't do anything yet - just testing registration
+        // Add safety checks
+        if (!$query || !is_object($query)) {
+            return;
+        }
+
+        // Check methods exist
+        if (!method_exists($query, 'is_main_query') || !method_exists($query, 'set')) {
+            return;
+        }
+
+        // Only enable for frontend search queries
+        if (is_search() && $query->is_main_query() && !is_admin()) {
+            $query->set('ep_integrate', true);
+            $this->search_forced = true; // Track for debug notice
+        }
     }
 
     /**
@@ -70,13 +100,17 @@ class EP_Instant_Search {
     public function debug_notice() {
         if (isset($this->ep_found) && $this->ep_found) {
             echo '<div class="notice notice-success is-dismissible">';
-            echo '<p><strong>EP Instant Search DEBUG STEP 3:</strong> Filter registered successfully!</p>';
+            echo '<p><strong>EP Instant Search DEBUG STEP 4:</strong> Full search logic active!</p>';
             echo '<p>Method: ' . (isset($this->filter_registered) ? esc_html($this->filter_registered) : 'unknown') . '</p>';
             echo '<p>EP_VERSION: ' . (defined('EP_VERSION') ? esc_html(EP_VERSION) : 'undefined') . '</p>';
+            if (isset($this->search_forced) && $this->search_forced) {
+                echo '<p style="color: green; font-weight: bold;">✓ Search was forced to use ElasticPress</p>';
+            }
+            echo '<p><em>Try searching on the frontend to test!</em></p>';
             echo '</div>';
         } else {
             echo '<div class="notice notice-warning is-dismissible">';
-            echo '<p><strong>EP Instant Search DEBUG STEP 3:</strong> ElasticPress not found</p>';
+            echo '<p><strong>EP Instant Search DEBUG STEP 4:</strong> ElasticPress not found</p>';
             echo '</div>';
         }
     }
