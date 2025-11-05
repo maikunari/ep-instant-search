@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: ElasticPress Instant Search
+ * Plugin Name: ElasticPress Instant Search (DIAGNOSTICS)
  * Plugin URI: https://github.com/maikunari/ep-instant-search
- * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Forces ElasticPress integration for all frontend searches.
- * Version: 2.13.0
+ * Description: DIAGNOSTIC VERSION - Enable WP_DEBUG to see detailed logs in /wp-content/ep-instant-debug.txt
+ * Version: 2.13.1-diagnostics
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -29,6 +29,30 @@ class EP_Instant_Search {
         // Admin settings
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
+
+        // Diagnostic notice
+        add_action('admin_notices', array($this, 'diagnostic_notice'));
+    }
+
+    /**
+     * Show diagnostic instructions
+     */
+    public function diagnostic_notice() {
+        $debug_enabled = defined('WP_DEBUG') && WP_DEBUG;
+        $log_file = WP_CONTENT_DIR . '/ep-instant-debug.txt';
+
+        echo '<div class="notice notice-info">';
+        echo '<p><strong>EP Instant Search DIAGNOSTICS Active</strong></p>';
+
+        if ($debug_enabled) {
+            echo '<p style="color: green;">✓ WP_DEBUG is enabled - Logging to: ' . esc_html($log_file) . '</p>';
+            echo '<p>Try a search on the frontend, then check the log file to see what\'s happening.</p>';
+        } else {
+            echo '<p style="color: orange;">⚠ WP_DEBUG is disabled - No logs will be created</p>';
+            echo '<p>To enable logging, add to wp-config.php: <code>define(\'WP_DEBUG\', true);</code></p>';
+        }
+
+        echo '</div>';
     }
 
     /**
@@ -113,11 +137,13 @@ class EP_Instant_Search {
     public function force_ep_for_search($enabled, $query) {
         // Add safety checks to prevent fatal errors
         if (!$query || !is_object($query)) {
+            $this->debug_log("FILTER CHECK: Query is not valid object");
             return $enabled;
         }
 
         // Check if required methods exist
         if (!method_exists($query, 'is_main_query') || !method_exists($query, 'get')) {
+            $this->debug_log("FILTER CHECK: Query missing required methods");
             return $enabled;
         }
 
@@ -127,17 +153,19 @@ class EP_Instant_Search {
             $is_search = is_search();
             $is_main = $query->is_main_query();
 
-            $this->debug_log("Query check - is_search: " . ($is_search ? 'YES' : 'NO') .
+            $this->debug_log("FILTER CHECK - is_search: " . ($is_search ? 'YES' : 'NO') .
                            ", is_main_query: " . ($is_main ? 'YES' : 'NO') .
-                           ", search term: " . ($search_term ? $search_term : 'EMPTY'));
+                           ", search term: " . ($search_term ? $search_term : 'EMPTY') .
+                           ", current enabled: " . ($enabled ? 'TRUE' : 'FALSE'));
         }
 
         // Only enable for search queries
         if (is_search() && $query->is_main_query() && !is_admin()) {
-            $this->debug_log("FORCING ElasticPress for search query");
+            $this->debug_log("FORCING ElasticPress for search query - RETURNING TRUE");
             return true;
         }
 
+        $this->debug_log("NOT forcing - returning original enabled value: " . ($enabled ? 'TRUE' : 'FALSE'));
         return $enabled;
     }
     
