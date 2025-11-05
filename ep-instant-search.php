@@ -3,7 +3,7 @@
  * Plugin Name: ElasticPress Instant Search
  * Plugin URI: https://github.com/maikunari/ep-instant-search
  * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Forces ElasticPress integration for all frontend searches.
- * Version: 2.13.0
+ * Version: 2.13.1
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -742,24 +742,33 @@ class EP_Instant_Search {
             if (defined('EP_VERSION')) {
                 ?>
                 <div class="notice notice-success">
-                    <p>✓ ElasticPress Version: <strong><?php echo EP_VERSION; ?></strong></p>
+                    <p>✓ ElasticPress Version: <strong><?php echo esc_html(EP_VERSION); ?></strong></p>
                 </div>
                 <?php
-                
-                $features = \ElasticPress\Features::factory();
-                $wc_feature = $features->get_registered_feature('woocommerce');
-                if ($wc_feature && $wc_feature->is_active()) {
-                    ?>
-                    <div class="notice notice-success">
-                        <p>✓ WooCommerce Feature: <strong>Active</strong></p>
-                    </div>
-                    <?php
-                } else {
-                    ?>
-                    <div class="notice notice-warning">
-                        <p>⚠ WooCommerce Feature is not active. Please activate it in ElasticPress > Features.</p>
-                    </div>
-                    <?php
+
+                // Safely check WooCommerce feature
+                if (class_exists('\ElasticPress\Features') && method_exists('\ElasticPress\Features', 'factory')) {
+                    try {
+                        $features = \ElasticPress\Features::factory();
+                        if ($features && method_exists($features, 'get_registered_feature')) {
+                            $wc_feature = $features->get_registered_feature('woocommerce');
+                            if ($wc_feature && method_exists($wc_feature, 'is_active') && $wc_feature->is_active()) {
+                                ?>
+                                <div class="notice notice-success">
+                                    <p>✓ WooCommerce Feature: <strong>Active</strong></p>
+                                </div>
+                                <?php
+                            } else {
+                                ?>
+                                <div class="notice notice-warning">
+                                    <p>⚠ WooCommerce Feature is not active. Please activate it in ElasticPress > Features.</p>
+                                </div>
+                                <?php
+                            }
+                        }
+                    } catch (Exception $e) {
+                        // Silently fail if ElasticPress isn't fully loaded
+                    }
                 }
             } else {
                 ?>
