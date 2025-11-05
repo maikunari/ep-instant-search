@@ -3,7 +3,7 @@
  * Plugin Name: ElasticPress Instant Search
  * Plugin URI: https://github.com/maikunari/ep-instant-search
  * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Forces ElasticPress integration for all frontend searches.
- * Version: 2.12.0
+ * Version: 2.12.1
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -74,7 +74,24 @@ class EP_Instant_Search {
         add_filter('ep_formatted_args', array($this, 'modify_search_for_skus'), 100, 3);
 
         // Force ElasticPress integration for frontend search queries
-        add_filter('ep_elasticpress_enabled', array($this, 'force_ep_for_search'), 10, 2);
+        // Use different hooks depending on ElasticPress version
+        if (has_filter('ep_elasticpress_enabled')) {
+            // Modern ElasticPress versions
+            add_filter('ep_elasticpress_enabled', array($this, 'force_ep_for_search'), 10, 2);
+        } else {
+            // Older ElasticPress versions - use pre_get_posts
+            add_action('pre_get_posts', array($this, 'force_ep_for_search_legacy'), 10);
+        }
+    }
+
+    /**
+     * Force ElasticPress for older versions (legacy method)
+     */
+    public function force_ep_for_search_legacy($query) {
+        if (is_search() && $query->is_main_query() && !is_admin()) {
+            $query->set('ep_integrate', true);
+            $this->debug_log("FORCING ElasticPress (legacy method) for search query");
+        }
     }
 
     /**
@@ -84,6 +101,17 @@ class EP_Instant_Search {
      * ElasticPress processes the query instead of falling back to MySQL
      */
     public function force_ep_for_search($enabled, $query) {
+        // Debug: Log all query details
+        if (!is_admin()) {
+            $search_term = $query->get('s');
+            $is_search = is_search();
+            $is_main = $query->is_main_query();
+
+            $this->debug_log("Query check - is_search: " . ($is_search ? 'YES' : 'NO') .
+                           ", is_main_query: " . ($is_main ? 'YES' : 'NO') .
+                           ", search term: " . ($search_term ? $search_term : 'EMPTY'));
+        }
+
         // Only enable for search queries
         if (is_search() && $query->is_main_query() && !is_admin()) {
             $this->debug_log("FORCING ElasticPress for search query");
