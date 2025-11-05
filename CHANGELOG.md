@@ -5,6 +5,28 @@ All notable changes to ElasticPress Instant Search will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2025-11-05
+
+### Fixed
+- **PRODUCTION COMPATIBILITY**: Added safety checks to prevent fatal errors on production
+- Added `method_exists()` checks before calling query object methods
+- Added null/object validation for query parameters
+- Prevents crashes when WordPress query object is in unexpected state
+
+### Technical Details
+- Both `force_ep_for_search()` and `force_ep_for_search_legacy()` now validate:
+  - Query object exists and is valid
+  - Required methods (`is_main_query`, `get`, `set`) exist before calling
+- Gracefully degrades if query object is malformed
+- Tested incrementally on production (Steps 1-4 debugging process)
+
+### Result
+- ✅ Plugin loads successfully on all environments (staging and production)
+- ✅ No fatal errors even with environmental differences
+- ✅ Maintains all functionality from v2.12.0
+- ✅ Instant search dropdown continues to work
+- ✅ Frontend search integration remains active
+
 ## [2.12.0] - 2025-11-05
 
 ### Fixed

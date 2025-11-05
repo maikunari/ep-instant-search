@@ -3,7 +3,7 @@
  * Plugin Name: ElasticPress Instant Search
  * Plugin URI: https://github.com/maikunari/ep-instant-search
  * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Forces ElasticPress integration for all frontend searches.
- * Version: 2.12.1
+ * Version: 2.13.0
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -88,6 +88,16 @@ class EP_Instant_Search {
      * Force ElasticPress for older versions (legacy method)
      */
     public function force_ep_for_search_legacy($query) {
+        // Add safety checks to prevent fatal errors
+        if (!$query || !is_object($query)) {
+            return;
+        }
+
+        // Check methods exist before calling
+        if (!method_exists($query, 'is_main_query') || !method_exists($query, 'set')) {
+            return;
+        }
+
         if (is_search() && $query->is_main_query() && !is_admin()) {
             $query->set('ep_integrate', true);
             $this->debug_log("FORCING ElasticPress (legacy method) for search query");
@@ -101,6 +111,16 @@ class EP_Instant_Search {
      * ElasticPress processes the query instead of falling back to MySQL
      */
     public function force_ep_for_search($enabled, $query) {
+        // Add safety checks to prevent fatal errors
+        if (!$query || !is_object($query)) {
+            return $enabled;
+        }
+
+        // Check if required methods exist
+        if (!method_exists($query, 'is_main_query') || !method_exists($query, 'get')) {
+            return $enabled;
+        }
+
         // Debug: Log all query details
         if (!is_admin()) {
             $search_term = $query->get('s');
