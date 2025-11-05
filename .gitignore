@@ -3,6 +3,9 @@
 errors/
 CLAUDE.md
 
+# Reference directories (not needed in repo)
+elasticpress/
+
 # IDE files
 .vscode/
 .idea/
