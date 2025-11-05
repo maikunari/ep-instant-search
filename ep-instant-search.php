@@ -3,7 +3,7 @@
  * Plugin Name: ElasticPress Instant Search
  * Plugin URI: https://github.com/maikunari/ep-instant-search
  * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Prevents ElasticPress from breaking product archives.
- * Version: 2.10.1
+ * Version: 2.11.0
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -73,53 +73,62 @@ class EP_Instant_Search {
         // Add global filter for variation SKU search
         add_filter('ep_formatted_args', array($this, 'modify_search_for_skus'), 100, 3);
 
-        // DISABLED: Archive protection still causing 503 errors
-        // The issue is likely that WooCommerce functions like is_shop() aren't available early enough
-        // Will need to implement this differently - perhaps with a later hook like 'wp' or 'template_redirect'
-        // For now, plugin works for instant search without archive protection
-
-        // add_action('pre_get_posts', array($this, 'mark_product_archives'), 5);
-        // add_filter('ep_skip_query_integration', array($this, 'skip_elasticpress_for_product_archives'), 10, 2);
+        // Archive protection: Disable ElasticPress for product archives
+        // DO NOT use pre_get_posts - it fires too early and causes 503
+        // Use ep_skip_query_integration directly and check query properties without calling WooCommerce functions
+        add_filter('ep_skip_query_integration', array($this, 'skip_elasticpress_for_product_archives'), 10, 2);
     }
 
     /**
-     * Mark product archive queries with a flag
-     * This runs early in pre_get_posts to identify which queries should skip ElasticPress
-     */
-    public function mark_product_archives($query) {
-        // Only on frontend, main query
-        if (is_admin() || !$query->is_main_query()) {
-            return;
-        }
-
-        // Check if this is a product archive/category/tag page (but NOT search)
-        if (!$query->is_search() &&
-            (
-                $query->get('post_type') === 'product' ||
-                $query->is_post_type_archive('product') ||
-                $query->is_tax('product_cat') ||
-                $query->is_tax('product_tag') ||
-                (function_exists('is_shop') && is_shop())
-            )
-        ) {
-            // Set a flag on this specific query object
-            $query->set('ep_instant_skip_integration', true);
-            $this->debug_log("Marked query for MySQL: product archive/category/shop");
-        }
-    }
-
-    /**
-     * Skip ElasticPress for marked product archives
-     * Only skip if we explicitly marked this query in mark_product_archives()
+     * Skip ElasticPress for product archives
+     * SIMPLIFIED: No pre_get_posts, no is_shop(), just check query properties directly
      */
     public function skip_elasticpress_for_product_archives($skip, $query) {
-        // If this specific query was marked to skip ElasticPress, skip it
-        if (is_object($query) && $query->get('ep_instant_skip_integration')) {
-            $this->debug_log("Skipping ElasticPress for product archive (using MySQL)");
-            return true; // Skip ElasticPress, use MySQL
+        // Safety checks
+        if (!is_object($query)) {
+            return $skip;
         }
 
-        // Otherwise, let ElasticPress decide (don't interfere)
+        // Don't interfere with admin
+        if (is_admin()) {
+            return $skip;
+        }
+
+        // Don't interfere with AJAX (our instant search uses AJAX)
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return $skip;
+        }
+
+        // Don't interfere with non-main queries
+        if (method_exists($query, 'is_main_query') && !$query->is_main_query()) {
+            return $skip;
+        }
+
+        // ONLY skip ElasticPress for product archives/taxonomies (NOT search!)
+        // Check if this is a product-related query that's NOT a search
+        if (method_exists($query, 'is_search') && !$query->is_search()) {
+            // Check if it's a product taxonomy (category/tag)
+            if (method_exists($query, 'is_tax')) {
+                if ($query->is_tax('product_cat') || $query->is_tax('product_tag')) {
+                    $this->debug_log("Skipping ElasticPress for product taxonomy (using MySQL)");
+                    return true; // Skip ElasticPress, use MySQL
+                }
+            }
+
+            // Check if it's a product archive
+            if (method_exists($query, 'is_post_type_archive') && $query->is_post_type_archive('product')) {
+                $this->debug_log("Skipping ElasticPress for product archive (using MySQL)");
+                return true; // Skip ElasticPress, use MySQL
+            }
+
+            // Check if post_type is explicitly set to 'product'
+            if ($query->get('post_type') === 'product') {
+                $this->debug_log("Skipping ElasticPress for product query (using MySQL)");
+                return true; // Skip ElasticPress, use MySQL
+            }
+        }
+
+        // For everything else (including search), let ElasticPress decide
         return $skip;
     }
     
@@ -257,7 +266,7 @@ class EP_Instant_Search {
                 'ep-instant-search-js',
                 plugin_dir_url(__FILE__) . 'assets/instant-search.js',
                 array('jquery'),
-                '2.10.1',
+                '2.11.0',
                 true
             );
             
