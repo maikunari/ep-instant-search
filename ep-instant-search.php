@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: ElasticPress Instant Search (DEBUG STEP 2)
+ * Plugin Name: ElasticPress Instant Search (DEBUG STEP 3)
  * Plugin URI: https://github.com/maikunari/ep-instant-search
- * Description: DEBUG STEP 2 - Testing ElasticPress detection
- * Version: 2.12.3-debug-step2
+ * Description: DEBUG STEP 3 - Testing filter registration with has_filter check
+ * Version: 2.12.4-debug-step3
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -37,6 +37,31 @@ class EP_Instant_Search {
         // If we got here, ElasticPress is active
         // Store this for the debug notice
         $this->ep_found = true;
+
+        // Test filter registration with has_filter() check
+        if (has_filter('ep_elasticpress_enabled')) {
+            add_filter('ep_elasticpress_enabled', array($this, 'force_ep_for_search'), 10, 2);
+            $this->filter_registered = 'modern (ep_elasticpress_enabled)';
+        } else {
+            // Fallback to pre_get_posts for older versions
+            add_action('pre_get_posts', array($this, 'force_ep_for_search_legacy'), 10);
+            $this->filter_registered = 'legacy (pre_get_posts)';
+        }
+    }
+
+    /**
+     * Modern method: Force ElasticPress via ep_elasticpress_enabled filter
+     */
+    public function force_ep_for_search($enabled, $query) {
+        // Just return the value - don't actually modify anything yet
+        return $enabled;
+    }
+
+    /**
+     * Legacy method: Force ElasticPress via pre_get_posts
+     */
+    public function force_ep_for_search_legacy($query) {
+        // Don't do anything yet - just testing registration
     }
 
     /**
@@ -45,11 +70,13 @@ class EP_Instant_Search {
     public function debug_notice() {
         if (isset($this->ep_found) && $this->ep_found) {
             echo '<div class="notice notice-success is-dismissible">';
-            echo '<p><strong>EP Instant Search DEBUG STEP 2:</strong> ElasticPress check passed! EP_VERSION: ' . (defined('EP_VERSION') ? EP_VERSION : 'undefined') . '</p>';
+            echo '<p><strong>EP Instant Search DEBUG STEP 3:</strong> Filter registered successfully!</p>';
+            echo '<p>Method: ' . (isset($this->filter_registered) ? esc_html($this->filter_registered) : 'unknown') . '</p>';
+            echo '<p>EP_VERSION: ' . (defined('EP_VERSION') ? esc_html(EP_VERSION) : 'undefined') . '</p>';
             echo '</div>';
         } else {
             echo '<div class="notice notice-warning is-dismissible">';
-            echo '<p><strong>EP Instant Search DEBUG STEP 2:</strong> ElasticPress not found</p>';
+            echo '<p><strong>EP Instant Search DEBUG STEP 3:</strong> ElasticPress not found</p>';
             echo '</div>';
         }
     }
