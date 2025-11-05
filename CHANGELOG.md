@@ -5,6 +5,33 @@ All notable changes to ElasticPress Instant Search will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2025-11-05
+
+### Fixed
+- **CRITICAL**: Fixed frontend search results page not using ElasticPress
+- Regular WordPress search (`?s=query`) was falling back to MySQL instead of Elasticsearch
+- Search results page was showing recent blog posts instead of relevant search results
+- Added `ep_elasticpress_enabled` filter to force ElasticPress integration for all frontend searches
+
+### Technical Details
+- New `force_ep_for_search()` method ensures ElasticPress handles main search queries
+- Only applies to frontend search queries (not admin, not secondary queries)
+- Debug logging tracks when ElasticPress integration is forced
+- Works alongside existing instant search AJAX functionality
+
+### Result
+- ✅ Instant search dropdown → Elasticsearch (fast AJAX results)
+- ✅ Search results page (`?s=query`) → Elasticsearch (relevant results, not blog posts)
+- ✅ Products now appear in search results when hitting Enter
+- ✅ SKU search works on both instant search and full results page
+
+## [2.11.0] - 2025-11-05
+
+### Changed
+- Removed archive protection code that was causing 503 errors
+- Plugin now focuses solely on search enhancement
+- Archive handling delegated to ElasticPress WooCommerce feature settings
+
 ## [2.10.0] - 2025-11-05
 
 ### Fixed

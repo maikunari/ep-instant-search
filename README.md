@@ -274,15 +274,14 @@ GPL v2 or later
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
-### Latest: 2.10.0 (2025-11-05)
+### Latest: 2.12.0 (2025-11-05)
 
-**Archive Protection Re-Implemented (Properly!):**
-- Fixed archive protection using proper WordPress hooks
-- Uses `pre_get_posts` to mark product archives BEFORE ElasticPress checks
-- Only targets WooCommerce product pages (archives, categories, shop)
-- Search queries still use Elasticsearch for speed
-- Product archives use MySQL for reliability
-- No interference with other page types
+**Fixed Frontend Search Integration:**
+- **CRITICAL FIX**: Search results page now properly uses ElasticPress
+- Regular search (`?s=query`) was falling back to MySQL, showing blog posts instead of products
+- Added automatic ElasticPress integration forcing for all frontend searches
+- Both instant search dropdown AND full search results page now use Elasticsearch
+- Products now appear correctly when users hit Enter in search box
 
 ### 2.9.1 (2025-11-05)
 

@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ElasticPress Instant Search
  * Plugin URI: https://github.com/maikunari/ep-instant-search
- * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Prevents ElasticPress from breaking product archives.
- * Version: 2.11.0
+ * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Forces ElasticPress integration for all frontend searches.
+ * Version: 2.12.0
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -73,7 +73,24 @@ class EP_Instant_Search {
         // Add global filter for variation SKU search
         add_filter('ep_formatted_args', array($this, 'modify_search_for_skus'), 100, 3);
 
-        // REMOVED: All archive protection code to isolate the 503 issue
+        // Force ElasticPress integration for frontend search queries
+        add_filter('ep_elasticpress_enabled', array($this, 'force_ep_for_search'), 10, 2);
+    }
+
+    /**
+     * Force ElasticPress to handle frontend search queries
+     *
+     * This ensures that when users type in the search box and hit Enter,
+     * ElasticPress processes the query instead of falling back to MySQL
+     */
+    public function force_ep_for_search($enabled, $query) {
+        // Only enable for search queries
+        if (is_search() && $query->is_main_query() && !is_admin()) {
+            $this->debug_log("FORCING ElasticPress for search query");
+            return true;
+        }
+
+        return $enabled;
     }
     
     /**
@@ -89,10 +106,10 @@ class EP_Instant_Search {
         }
 
         $search_term = $args['s'];
-        $this->debug_log("Search term: {$search_term}");
+        $this->debug_log("Search term: " . $search_term);
 
         // Check if this looks like a SKU search (contains hyphen, underscore, or is short alphanumeric)
-        $is_sku_search = preg_match('/[-_]/', $search_term) || (strlen($search_term) <= 10 && preg_match('/^[a-z0-9]+$/i, $search_term));
+        $is_sku_search = preg_match('/[-_]/', $search_term) || (strlen($search_term) <= 10 && preg_match('/^[a-z0-9]+$/i', $search_term));
 
         // Only apply SKU boosting for actual SKU-like searches
         if (!$is_sku_search) {
