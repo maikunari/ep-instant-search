@@ -38,21 +38,27 @@ class EP_Instant_Search {
      * Show diagnostic instructions
      */
     public function diagnostic_notice() {
-        $debug_enabled = defined('WP_DEBUG') && WP_DEBUG;
-        $log_file = WP_CONTENT_DIR . '/ep-instant-debug.txt';
-
-        echo '<div class="notice notice-info">';
-        echo '<p><strong>EP Instant Search DIAGNOSTICS Active</strong></p>';
-
-        if ($debug_enabled) {
-            echo '<p style="color: green;">✓ WP_DEBUG is enabled - Logging to: ' . esc_html($log_file) . '</p>';
-            echo '<p>Try a search on the frontend, then check the log file to see what\'s happening.</p>';
-        } else {
-            echo '<p style="color: orange;">⚠ WP_DEBUG is disabled - No logs will be created</p>';
-            echo '<p>To enable logging, add to wp-config.php: <code>define(\'WP_DEBUG\', true);</code></p>';
+        // Only show on our settings page to avoid conflicts
+        $screen = get_current_screen();
+        if (!$screen || strpos($screen->id, 'ep-instant-search') === false) {
+            return;
         }
 
-        echo '</div>';
+        $debug_enabled = defined('WP_DEBUG') && WP_DEBUG;
+        $log_file = defined('WP_CONTENT_DIR') ? WP_CONTENT_DIR . '/ep-instant-debug.txt' : '';
+
+        ?>
+        <div class="notice notice-info">
+            <p><strong>EP Instant Search DIAGNOSTICS Active</strong></p>
+            <?php if ($debug_enabled && $log_file): ?>
+                <p style="color: green;">✓ WP_DEBUG is enabled - Logging to: <?php echo esc_html($log_file); ?></p>
+                <p>Try a search on the frontend, then check the log file to see what's happening.</p>
+            <?php else: ?>
+                <p style="color: orange;">⚠ WP_DEBUG is disabled - No logs will be created</p>
+                <p>To enable logging, add to wp-config.php: <code>define('WP_DEBUG', true);</code></p>
+            <?php endif; ?>
+        </div>
+        <?php
     }
 
     /**
