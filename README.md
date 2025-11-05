@@ -21,6 +21,8 @@ ElasticPress Instant Search is a simple wrapper around the free ElasticPress plu
 - 🛒 **WooCommerce ready** - Shows product prices, images, SKUs, and stock status
 - 📝 **Multi-content** - Searches all content types configured in ElasticPress
 - ⚙️ **Customizable** - Admin settings for appearance and behavior
+- 🔒 **Secure** - Production-hardened with security best practices
+- 🚀 **Archive protection** - Prevents ElasticPress from breaking product archives
 
 ## Requirements
 
@@ -113,12 +115,23 @@ You can add custom selectors in the admin settings.
 
 ## How It Works
 
+### Search Flow
+
 1. **User types** in a search field
 2. **Instant feedback** - Loading spinner appears immediately
 3. **Smart debouncing** - Waits 100ms after typing stops
 4. **ElasticPress search** - Query sent through WordPress with `ep_integrate => true`
 5. **Results display** - Formatted results replace the spinner
 6. **Caching** - Results cached for 5 minutes server-side, 1 minute client-side
+
+### Archive Protection (v2.8.0+)
+
+The plugin intelligently separates search queries from regular page views:
+
+- **Search box queries** → Uses Elasticsearch (fast, relevant results)
+- **Product archives/categories** → Uses MySQL (reliable, always complete)
+
+This prevents the common issue where ElasticPress breaks product archives when the Elasticsearch index is incomplete or out of sync. You get the best of both worlds: fast search + reliable archives.
 
 ## Performance Features
 
@@ -127,6 +140,8 @@ You can add custom selectors in the admin settings.
 - **Smart caching** - Multi-layer caching strategy
 - **Optimized queries** - Full post objects to minimize database calls
 - **Instant visual feedback** - Spinner shows immediately while loading
+- **Conditional logging** - Debug logs only in development (WP_DEBUG mode)
+- **Log rotation** - Automatic cleanup when logs exceed 1MB
 
 ## Customization
 
@@ -194,6 +209,32 @@ add_filter('ep_instant_search_query_args', function($args, $search_term) {
 - Verify object cache is working
 - Review ElasticPress query monitor data
 
+## Security
+
+This plugin follows WordPress security best practices:
+
+- ✅ **Input sanitization** - All user input properly sanitized
+- ✅ **Output escaping** - All output escaped to prevent XSS
+- ✅ **SQL injection protection** - Uses WordPress APIs exclusively
+- ✅ **Authorization checks** - Admin functions require proper capabilities
+- ✅ **Secure logging** - Conditional debug logging with file size limits
+- ✅ **CSS sanitization** - Custom CSS stripped of malicious code
+
+### Debug Logging
+
+Debug logs are **disabled by default** in production. To enable logging for troubleshooting:
+
+1. Add to your `wp-config.php`:
+   ```php
+   define('WP_DEBUG', true);
+   ```
+
+2. Logs will be written to `/wp-content/ep-instant-debug.txt`
+
+3. Logs automatically rotate when they exceed 1MB
+
+**Important:** Always disable `WP_DEBUG` in production for security and performance.
+
 ## Compatibility
 
 - Works with most themes and page builders
@@ -210,10 +251,14 @@ Typical response times:
 
 ## Support
 
-This plugin is provided as-is. For issues related to:
+- **Documentation**: This README and inline code comments
+- **Issues**: [GitHub Issues](https://github.com/maikunari/ep-instant-search/issues)
+- **Author**: Mike Sewell (https://sonicpixel.jp)
+
+For issues related to:
 - **Search accuracy/relevance**: Configure in ElasticPress settings
 - **Elasticsearch connection**: See ElasticPress documentation
-- **Plugin bugs**: Create an issue with details
+- **Plugin bugs**: Create a GitHub issue with details
 
 ## License
 
@@ -221,15 +266,33 @@ GPL v2 or later
 
 ## Credits
 
-Built to work with the excellent [ElasticPress](https://github.com/10up/ElasticPress) plugin by 10up.
+- **Author**: Mike Sewell
+- **Built with**: [ElasticPress](https://github.com/10up/ElasticPress) by 10up
+- **Repository**: https://github.com/maikunari/ep-instant-search
 
 ## Changelog
 
-### 1.0.0
-- Initial release
-- Instant search with loading spinner
-- Multi-content type support
-- WooCommerce product search
-- Mobile optimized
-- Smart caching system
-- Bulk data loading for performance
+See [CHANGELOG.md](CHANGELOG.md) for complete version history.
+
+### Latest: 2.9.0 (2025-11-05)
+
+**Security Improvements:**
+- Conditional debug logging (only when WP_DEBUG enabled)
+- Custom CSS XSS vulnerability fixed
+- Log file size limits and auto-rotation
+- File locking for concurrent writes
+
+**Performance:**
+- Reduced disk I/O in production
+- Log rotation prevents performance degradation
+
+### 2.8.0 (2025-11-05)
+
+**Major Feature:**
+- Archive protection - prevents ElasticPress from hijacking product archives
+- Elasticsearch for search, MySQL for archives (best of both worlds)
+- Fixes products disappearing when Elasticsearch sync incomplete
+
+### 2.7.0 and Earlier
+
+See [CHANGELOG.md](CHANGELOG.md) for complete history.
