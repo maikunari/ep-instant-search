@@ -73,63 +73,7 @@ class EP_Instant_Search {
         // Add global filter for variation SKU search
         add_filter('ep_formatted_args', array($this, 'modify_search_for_skus'), 100, 3);
 
-        // Archive protection: Disable ElasticPress for product archives
-        // DO NOT use pre_get_posts - it fires too early and causes 503
-        // Use ep_skip_query_integration directly and check query properties without calling WooCommerce functions
-        add_filter('ep_skip_query_integration', array($this, 'skip_elasticpress_for_product_archives'), 10, 2);
-    }
-
-    /**
-     * Skip ElasticPress for product archives
-     * SIMPLIFIED: No pre_get_posts, no is_shop(), just check query properties directly
-     */
-    public function skip_elasticpress_for_product_archives($skip, $query) {
-        // Safety checks
-        if (!is_object($query)) {
-            return $skip;
-        }
-
-        // Don't interfere with admin
-        if (is_admin()) {
-            return $skip;
-        }
-
-        // Don't interfere with AJAX (our instant search uses AJAX)
-        if (defined('DOING_AJAX') && DOING_AJAX) {
-            return $skip;
-        }
-
-        // Don't interfere with non-main queries
-        if (method_exists($query, 'is_main_query') && !$query->is_main_query()) {
-            return $skip;
-        }
-
-        // ONLY skip ElasticPress for product archives/taxonomies (NOT search!)
-        // Check if this is a product-related query that's NOT a search
-        if (method_exists($query, 'is_search') && !$query->is_search()) {
-            // Check if it's a product taxonomy (category/tag)
-            if (method_exists($query, 'is_tax')) {
-                if ($query->is_tax('product_cat') || $query->is_tax('product_tag')) {
-                    $this->debug_log("Skipping ElasticPress for product taxonomy (using MySQL)");
-                    return true; // Skip ElasticPress, use MySQL
-                }
-            }
-
-            // Check if it's a product archive
-            if (method_exists($query, 'is_post_type_archive') && $query->is_post_type_archive('product')) {
-                $this->debug_log("Skipping ElasticPress for product archive (using MySQL)");
-                return true; // Skip ElasticPress, use MySQL
-            }
-
-            // Check if post_type is explicitly set to 'product'
-            if ($query->get('post_type') === 'product') {
-                $this->debug_log("Skipping ElasticPress for product query (using MySQL)");
-                return true; // Skip ElasticPress, use MySQL
-            }
-        }
-
-        // For everything else (including search), let ElasticPress decide
-        return $skip;
+        // REMOVED: All archive protection code to isolate the 503 issue
     }
     
     /**
