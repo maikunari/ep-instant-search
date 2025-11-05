@@ -5,6 +5,18 @@ All notable changes to ElasticPress Instant Search will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.1] - 2025-11-05
+
+### Fixed
+- **CRITICAL**: Fixed 503 error on plugin activation caused by `skip_elasticpress_for_archives()` filter
+- Added safety checks to ensure query object is valid before calling methods
+- Filter now only applies to main query on frontend (excludes admin and AJAX queries)
+- Added `is_main_query()` check to prevent interfering with custom queries
+
+### Changed
+- Archive protection filter now returns original `$skip` value when conditions don't match
+- Improved error handling to prevent fatal errors during WordPress initialization
+
 ## [2.9.0] - 2025-11-05
 
 ### Added

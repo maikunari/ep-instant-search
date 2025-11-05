@@ -3,7 +3,7 @@
  * Plugin Name: ElasticPress Instant Search
  * Plugin URI: https://github.com/maikunari/ep-instant-search
  * Description: Custom instant search for WooCommerce products using ElasticPress without requiring ElasticPress.io subscription. Supports searching by variation SKUs. Prevents ElasticPress from hijacking product archives.
- * Version: 2.9.0
+ * Version: 2.9.1
  * Author: Mike Sewell
  * Author URI: https://sonicpixel.jp
  * Text Domain: ep-instant-search
@@ -83,6 +83,26 @@ class EP_Instant_Search {
      * Only use ElasticPress for actual search queries
      */
     public function skip_elasticpress_for_archives($skip, $query) {
+        // Safety check: ensure we have a valid query object
+        if (!is_object($query) || !method_exists($query, 'is_search')) {
+            return $skip; // Return original value if query is invalid
+        }
+
+        // Don't interfere with admin queries
+        if (is_admin()) {
+            return $skip;
+        }
+
+        // Don't interfere with AJAX requests (handled separately)
+        if (defined('DOING_AJAX') && DOING_AJAX) {
+            return $skip;
+        }
+
+        // Only apply to main query on frontend
+        if (!$query->is_main_query()) {
+            return $skip;
+        }
+
         // Only use ElasticPress for actual search queries
         if ($query->is_search()) {
             return false; // Use ElasticPress for search
@@ -226,7 +246,7 @@ class EP_Instant_Search {
                 'ep-instant-search-js',
                 plugin_dir_url(__FILE__) . 'assets/instant-search.js',
                 array('jquery'),
-                '2.9.0',
+                '2.9.1',
                 true
             );
             

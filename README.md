@@ -274,7 +274,14 @@ GPL v2 or later
 
 See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
-### Latest: 2.9.0 (2025-11-05)
+### Latest: 2.9.1 (2025-11-05)
+
+**Critical Bug Fix:**
+- Fixed 503 error on plugin activation
+- Added safety checks to archive protection filter
+- Filter now only applies to main frontend queries
+
+### 2.9.0 (2025-11-05)
 
 **Security Improvements:**
 - Conditional debug logging (only when WP_DEBUG enabled)
